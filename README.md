@@ -114,11 +114,6 @@ bun run package                  # release/opencode-browser-<version>.zip for th
 `cli/` is the npm package `opencode-browser-cli` with its own lockfile. To release: bump `cli/package.json`, run
 `npm publish --access public` in `cli/`, then upload the zip from `bun run package`.
 
-## Credits
-
-The relay started as [Browser Control](https://github.com/anomalyco/browser-control) by Anomaly. The illustration
-was drawn with the [Anatomy](https://github.com/wheresryan22/anatomy) kit.
-
 ## License
 
 [MIT](LICENSE)
