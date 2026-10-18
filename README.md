@@ -1,118 +1,130 @@
-# OpenCode Browser
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/browse-dark.png">
+    <img src="assets/browse-light.png" alt="An isometric desk computer whose screen shows a web browser with an agent's tab group and cursor, cabled to a small relay box on the same bench." width="640">
+  </picture>
+</p>
 
-A Chromium extension (Chrome, Edge, Brave, Opera, Vivaldi, Chromium, Helium, Arc) that lets AI agents use your
-real browser through the `browse` MCP tools: open and drive tabs with Playwright, take screenshots, capture network
-traffic, record, and hand off to you for logins, 2FA, and payments. It has no UI of its own beyond a toolbar button
-and a status page; agents control it.
+<h1 align="center">browse</h1>
 
-```
-agent ── browse MCP (stdio) ── relay (127.0.0.1:19988) ── WebSocket ── extension ── chrome.debugger ── tabs
-```
+<p align="center">
+  Let your AI agents use your real browser: your tabs, your logins, your extensions.<br>
+  An MCP server and a Chromium extension, for <a href="https://opencode.ai">opencode</a> and any other MCP client.
+</p>
+
+---
+
+Agents get a `browse` MCP server. They open and drive tabs with Playwright, take screenshots, capture network
+traffic and record the screen. When it's your turn (a login, a 2FA prompt, a payment), they hand the tab back to you
+and continue once you click **Continue**.
+
+It works in Chrome, Edge, Brave, Arc, Helium, Vivaldi, Opera and Chromium.
 
 ## Install
 
+You need [Bun](https://bun.sh), Node.js 22+, and [opencode](https://opencode.ai).
+
+**1. Build it and add the `browse` tools to opencode**
+
 ```sh
-npx opencode-browser-cli install
+git clone https://github.com/R44VC0RP/browse.git
+cd browse
+bun run setup
 ```
 
-This installs the CLI into `~/.local/share/opencode-browser` (`%LOCALAPPDATA%\opencode-browser` on Windows), adds
-the `browse` MCP server to opencode's global config, copies the unpacked extension (reloading one that's already
-connected), and checks which browsers and profiles have OpenCode Browser. When none does, it opens the Chrome Web
-Store listing. There is nothing to pair: the extension connects to the local relay, which accepts only OpenCode
-Browser's extension IDs (store `mfnicocicmmlkpjnaffgihfjhdgjkdjg`, unpacked `afeafocngkodbmaipcngoamamfmekgfo`).
+**2. Load the extension**
 
-For development, load `dist` unpacked (after `bun install && bun run build`) (Developer mode, **Load unpacked**); the manifest
-key keeps that ID stable.
+Open `chrome://extensions` (or your browser's extensions page), turn on **Developer mode**, click **Load unpacked**
+and choose the `browse/dist` folder.
+
+**3. Restart opencode**
+
+That's it. Ask an agent to *"open news.ycombinator.com and tell me the top story"*.
+
+There's nothing to pair or sign in to: the extension only talks to a relay on `127.0.0.1`, which only accepts this
+extension. `bun run setup` is safe to re-run after `git pull`; it updates the tools and reloads the extension for you.
+
+> **Coming soon:** a Chrome Web Store listing and `npx opencode-browser-cli install`, so you can skip the clone.
+
+### Other MCP clients
+
+`setup` writes the server into opencode's config. For other clients, add an stdio server that runs the built CLI:
+
+```json
+{
+  "browse": { "command": "node", "args": ["/path/to/browse/cli/dist/cli.mjs", "mcp"] }
+}
+```
 
 ## Using it
 
-- Agents open their own tabs, grouped at the start of the tab strip under the session's name, collapsed unless
-  you're looking at one. Tabs nobody uses for 10 minutes close (`tabs_cleanup` closes them right away).
-- Click the toolbar button on a tab to let agents use it (badge **ON**); click again to stop. RUN means an agent is
-  working in the tab, WAIT that it's waiting for you.
-- When an agent hands off (a login, a passkey), the page shows a banner; finish, then click **Continue**.
-- The status page (opened on install, and the extension's **Options**) shows the relay connection and can copy
-  diagnostics.
+- **Agents open their own tabs.** They're grouped at the top of your tab strip under the agent's session name and
+  stay collapsed unless you're looking at one. Tabs nobody touches for 10 minutes close by themselves.
+- **Hand an agent one of your tabs** by clicking the toolbar button on it. The badge shows **ON**; click again to take
+  it back. While an agent works the badge reads **RUN**, and **WAIT** when it needs you.
+- **Handoffs:** the page shows a banner. Do the human part, then click **Continue**.
+- **Status:** the extension's options page shows whether the relay is connected and can copy diagnostics.
 
-The agent guide is `cli/skills/browse/SKILL.md` (also the MCP `skill` tool).
+## Tools
 
-## Test it
+| Tool | What it does |
+| --- | --- |
+| `execute` | Run Playwright code against the session's page (`page`, `context`, `snapshot()`, `handoff()`, …) |
+| `session_new`, `session_list`, `session_use`, `session_current`, `session_reset`, `session_delete` | Named sessions, each with its own tabs; they survive restarts |
+| `session_adopt` | Take over a tab you handed over with the toolbar button |
+| `network_start`, `network_status`, `network_stop`, `network_cancel` | Capture traffic to a redacted HAR |
+| `recording_start`, `recording_stop`, `recording_status`, `recording_cancel` | Record a tab to MP4 or WebM |
+| `flight_recorder_start`, `flight_recorder_save_last`, … | Keep the last minute of video, save it when something breaks |
+| `secrets_status`, `secrets_refresh`, `secrets_run` | Reuse an authenticated session's credentials without exposing them |
+| `tabs_cleanup` | Close the agent's idle tabs |
+| `status`, `skill` | Connection status, and the full agent guide |
 
-```sh
-cd cli
-bun install && bun run build    # dist/cli.mjs, ../dist (the extension), and extension/
-node dist/cli.mjs install       # from a checkout, the browse MCP server runs src/main.ts with bun
+The agent guide is [`cli/skills/browse/SKILL.md`](cli/skills/browse/SKILL.md). Everything is also a CLI:
+`node cli/dist/cli.mjs --help`.
+
+## How it works
+
+```
+agent ── browse MCP (stdio) ── relay (127.0.0.1:19988) ── WebSocket ── extension ── chrome.debugger ── your tabs
 ```
 
-Load `dist` unpacked (or let `install` reload an already loaded copy).
+- **The relay** (`cli/`) is a local Chrome DevTools endpoint backed by the extension. It keeps named sessions,
+  handoffs, recordings, network capture and a journal, and starts on demand.
+- **The extension** (`src/`) connects to the relay and runs its commands through `chrome.debugger`. It groups agent
+  tabs, closes idle ones, shows the toolbar badge and the in-page handoff banner.
+- **Hard to tell from a person.** `execute` uses [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright), so
+  pages can't see the debugger, and input moves like a person: curved mouse paths, paced typing, gliding scroll. Set
+  `OPENCODE_BROWSER_HUMAN_INPUT=0` for full speed.
 
-Then, from an agent with the `browse` tools: `session_new`, `execute` with
-`await page.goto("https://example.com"); return page.title()`, `execute` with `return (await page.screenshot()).length`,
-and `session_list`. `opencode-browser status` shows the relay, the extension, and every tab agents can use.
+Permissions: `debugger`, `tabs`, `tabGroups`, `storage`, `alarms`, `offscreen` and `tabCapture` (recordings), and
+access to all sites so agents can work wherever you ask. Nothing leaves your computer except what your agent sends
+to its model provider; see the [privacy policy](store/privacy-policy.md).
 
-## The CLI (`cli/`, npm `opencode-browser-cli`)
+## Troubleshooting
 
-Commands are `opencode-browser <command>` (or `npx opencode-browser-cli <command>`).
-
-- **Setup** (`cli/src/setup.ts`): `install [--no-open]`, `extension` (opens the unpacked extension folder),
-  `uninstall`. `install` also removes what earlier versions set up (a native messaging host, an opencode plugin,
-  and an `opencode-browser` MCP entry).
-- **Automation** (the rest of `cli/src`): the relay the extension connects to, and the clients that drive it:
-  `execute`, `session`, `network` (capture, redacted HAR), `secrets`, `recording`, `flight-recorder`, `tabs
-  cleanup`, `journal`, `doctor`, `status`, and `mcp` (the `browse` MCP server over stdio). The CLI and MCP server
-  start the relay on demand.
-
-  This was Browser Control (anomalyco/browser-control 8c80ac2), now part of OpenCode Browser: renamed, on its own
-  port, accepting only OpenCode Browser's extension IDs, with files under the data root.
-
-Logs live in `<data root>/logs/relay.log`: relay lifecycle, extension connects and disconnects (with the
-extension's build), socket errors, every HTTP request with status and duration, and input timing; rotated at 1 MB.
-`OPENCODE_BROWSER_DEBUG=1` adds per-CDP-message tracing to the relay's stderr. Environment overrides:
-`OPENCODE_BROWSER_PORT`, `OPENCODE_BROWSER_HOME`, `OPENCODE_BROWSER_EXTENSION_ORIGINS`, `OPENCODE_BROWSER_HUMAN_INPUT`.
-
-The relay and the extension accept WebSocket messages up to 256 MiB, as Playwright's CDP client does. The extension
-fails a single command whose result is larger (for example a full-page screenshot of a very long page) instead of
-sending it, and the relay logs and drops a connection that sends more instead of crashing.
-
-Agent input looks human by default (`cli/src/human-input.ts`): each mouse move becomes a curved, eased ~60 Hz
-trajectory from the last pointer position, clicks land a few pixels off center with a human settle and hold, key
-presses are spaced 30-110 ms apart, and wheel scrolling glides. A click costs ~0.5-1 s instead of ~0.1 s;
-`OPENCODE_BROWSER_HUMAN_INPUT=0` turns it off.
-
-`execute` runs Playwright's API through [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright)
-(`patchright-core`, pinned to the matching Playwright version), which never enables CDP's `Runtime` domain, so pages
-can't detect the debugger that way. A page's console messages and uncaught errors are captured only after
-`pageConsole.start()` (`cli/src/page-console.ts`), which makes that page detectable until `pageConsole.stop()`.
-`cli/src/patchright-tuning.ts` restores Playwright's fast lookup for `count()` and `all()`; relay.log records
-`patchright.tuning` if a Patchright update moves the internals it patches.
-
-## The extension (`src/`)
-
-| File | What it does |
-| --- | --- |
-| `background/agent-relay.ts` | The WebSocket link to the relay: runs its commands (CDP through `chrome.debugger`, tabs, groups, badges, recordings) and reports tab events |
-| `background/agent-groups.ts`, `tab-cleanup.ts` | Agent tab groups (collapsed, at the start of the strip) and closing idle agent tabs |
-| `background/debugger-hub.ts` | One debugger attachment per tab, restored after a worker restart or extension reload |
-| `background/index.ts` | Toolbar button, badges, the status page's port |
-| `content/page-status.ts` | The in-page banner while an agent works or waits for a handoff |
-| `agent-relay/offscreen.ts` | Tab-capture recording |
-| `status/` (`welcome.html`) | The status page |
-
-## Releasing
-
-`cli/package.json` holds the release version; the store zip and the bundled extension are stamped with it.
-
-1. Bump `version` in `cli/package.json` and merge.
-2. `cd cli && bun install && npm publish --access public` publishes `opencode-browser-cli` (`prepublishOnly` builds
-   the CLI and the bundled extension).
-3. `bun run package` writes `release/opencode-browser-<version>.zip`; upload it in the Chrome Web Store dashboard.
-
-The CLI has its own lockfile so its dependencies stay out of the monorepo's; `cd cli && bun src/main.ts <command>`
-runs it from source.
+- `node cli/dist/cli.mjs status` shows the relay, the extension and every tab agents can use.
+- `node cli/dist/cli.mjs doctor` checks the install.
+- Logs: `~/.local/share/opencode-browser/logs/relay.log`.
+- Extension says another browser is connected: only one browser profile can be connected at a time. Close the other
+  one, then click **Reconnect** on the status page.
 
 ## Development
 
 ```sh
-bun run dev       # rebuilds dist/ on change; reload the extension to pick it up
-bun typecheck
+bun install && bun run dev       # rebuilds dist/ on change; reload the extension to pick it up
+bun run typecheck
+cd cli && bun src/main.ts status # the CLI from source
+bun run package                  # release/opencode-browser-<version>.zip for the Chrome Web Store
 ```
+
+`cli/` is the npm package `opencode-browser-cli` with its own lockfile. To release: bump `cli/package.json`, run
+`npm publish --access public` in `cli/`, then upload the zip from `bun run package`.
+
+## Credits
+
+The relay started as [Browser Control](https://github.com/anomalyco/browser-control) by Anomaly. The illustration
+was drawn with the [Anatomy](https://github.com/wheresryan22/anatomy) kit.
+
+## License
+
+[MIT](LICENSE)
