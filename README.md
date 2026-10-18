@@ -21,7 +21,7 @@ connected), and checks which browsers and profiles have OpenCode Browser. When n
 Store listing. There is nothing to pair: the extension connects to the local relay, which accepts only OpenCode
 Browser's extension IDs (store `mfnicocicmmlkpjnaffgihfjhdgjkdjg`, unpacked `afeafocngkodbmaipcngoamamfmekgfo`).
 
-For development, load `packages/browser-extension/dist` unpacked (Developer mode, **Load unpacked**); the manifest
+For development, load `dist` unpacked (after `bun install && bun run build`) (Developer mode, **Load unpacked**); the manifest
 key keeps that ID stable.
 
 ## Using it
@@ -39,12 +39,12 @@ The agent guide is `cli/skills/browse/SKILL.md` (also the MCP `skill` tool).
 ## Test it
 
 ```sh
-cd packages/browser-extension/cli
+cd cli
 bun install && bun run build    # dist/cli.mjs, ../dist (the extension), and extension/
 node dist/cli.mjs install       # from a checkout, the browse MCP server runs src/main.ts with bun
 ```
 
-Load `packages/browser-extension/dist` unpacked (or let `install` reload an already loaded copy).
+Load `dist` unpacked (or let `install` reload an already loaded copy).
 
 Then, from an agent with the `browse` tools: `session_new`, `execute` with
 `await page.goto("https://example.com"); return page.title()`, `execute` with `return (await page.screenshot()).length`,

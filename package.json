@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode/browser-extension",
-  "version": "2.0.22",
+  "name": "browse",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -12,10 +12,10 @@
     "package": "bun scripts/package.ts"
   },
   "devDependencies": {
-    "@tsconfig/node22": "catalog:",
-    "@types/bun": "catalog:",
+    "@tsconfig/node22": "22.0.2",
+    "@types/bun": "1.4.0",
     "@types/chrome": "0.3.4",
-    "@typescript/native": "catalog:",
+    "@typescript/native": "npm:typescript@7.0.2",
     "vite": "8.2.2"
   }
 }

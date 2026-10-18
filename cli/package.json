@@ -18,8 +18,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anomalyco/opencode.git",
-    "directory": "packages/browser-extension/cli"
+    "url": "git+https://github.com/R44VC0RP/browse.git",
+    "directory": "cli"
   },
   "scripts": {
     "build": "bun build.ts",
