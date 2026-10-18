@@ -78,9 +78,14 @@ The agent guide is [`cli/skills/browse/SKILL.md`](cli/skills/browse/SKILL.md). E
 
 ## How it works
 
-```
-agent ── browse MCP (stdio) ── relay (127.0.0.1:19988) ── WebSocket ── extension ── chrome.debugger ── your tabs
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/how-dark.png">
+  <img src="assets/how-light.png" alt="Three machines on one bench, cabled in a line: the agent's terminal calling browse.execute, the relay box in the middle, and the computer whose browser the agent drives.">
+</picture>
+
+The agent talks to the `browse` MCP server over stdio. The server hands each command to the relay on
+`127.0.0.1:19988`, and the extension, connected to the relay over a WebSocket, runs it in your browser through
+`chrome.debugger`.
 
 - **The relay** (`cli/`) is a local Chrome DevTools endpoint backed by the extension. It keeps named sessions,
   handoffs, recordings, network capture and a journal, and starts on demand.
