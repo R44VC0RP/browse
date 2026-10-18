@@ -1,16 +1,10 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/browse-dark.png">
-    <img src="assets/browse-light.png" alt="An isometric desk computer whose screen shows a web browser with an agent's tab group and cursor, cabled to a small relay box on the same bench." width="640">
-  </picture>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.png">
+  <img src="assets/banner-light.png" alt="browse: let your AI agents use your real browser. An isometric desk computer whose screen shows a web browser with an agent's tab group, cabled to a small relay box.">
+</picture>
 
-<h1 align="center">browse</h1>
-
-<p align="center">
-  Let your AI agents use your real browser: your tabs, your logins, your extensions.<br>
-  An MCP server and a Chromium extension, for <a href="https://opencode.ai">opencode</a> and any other MCP client.
-</p>
+Let your AI agents use your real browser: your tabs, your logins, your extensions. An MCP server and a Chromium
+extension, for [opencode](https://opencode.ai) and any other MCP client.
 
 ---
 
