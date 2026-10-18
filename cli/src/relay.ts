@@ -558,11 +558,16 @@ const makeRelay = Effect.fnUntraced(function* (options: {
   // Handoffs and secrets run commands legitimately outlive Node's 5-minute default request timeout.
   httpServer.requestTimeout = 0
   httpServer.timeout = 0
+  // listenHttpServer handles errors only until the server listens; later ones (EMFILE on accept) would otherwise be
+  // unhandled and crash the relay.
+  httpServer.on("error", (error) => relayLog("http.error", { error: error.message, code: (error as NodeJS.ErrnoException).code }))
 
   const debugEnabled = yield* Config.Boolean("OPENCODE_BROWSER_DEBUG").pipe(Config.withDefault(false))
   const debugLog = debugEnabled ? (line: string) => console.error(`[bc ${new Date().toISOString().slice(11, 23)}] ${line}`) : undefined
   const contextDebugLog = debugLog ? (line: string) => debugLog(`[bc:ctx] ${line}`) : undefined
-  const websocketServer = new WebSocketServer({ noServer: true })
+  // ws defaults to 100 MiB and closes a socket that sends more. Playwright's own CDP client accepts 256 MiB (large
+  // screenshots and response bodies come close), so the relay does too.
+  const websocketServer = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 * 1024 })
   const cdpClients = new CdpClientPool<WebSocket>(
     (client, event) => cdpRuntime.deliver(client, event),
     (client, sessionId) => cdpRuntime.detach(client, sessionId),
@@ -735,6 +740,11 @@ const makeRelay = Effect.fnUntraced(function* (options: {
           console.error("Extension message handling failed", error)
         }
       })
+      // ws reports an oversized or malformed frame as an "error" on the socket and then closes it. Without a listener
+      // Node treats the event as unhandled and the relay crashes (and keeps crashing while the extension retries).
+      socket.on("error", (error) => {
+        relayLog("extension.error", { error: error.message, code: (error as NodeJS.ErrnoException).code })
+      })
       socket.on("close", (code, reason) => {
         relayLog("extension.close", { code, reason: reason.toString() || undefined, current: extensionRpc.isCurrent(socket) })
         if (extensionRpc.disconnectIfCurrent(socket)) {
@@ -755,6 +765,9 @@ const makeRelay = Effect.fnUntraced(function* (options: {
           error: { message: error instanceof Error ? error.message : String(error) },
         })
       })
+    })
+    socket.on("error", (error) => {
+      relayLog("client.error", { session: cdpClients.sessionId(socket), error: error.message, code: (error as NodeJS.ErrnoException).code })
     })
     socket.on("close", () => {
       debugLog?.(`client- ${cdpClients.sessionId(socket) ?? "raw"} total=${cdpClients.size - 1}`)

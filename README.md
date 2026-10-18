@@ -70,6 +70,10 @@ extension's build), socket errors, every HTTP request with status and duration, 
 `OPENCODE_BROWSER_DEBUG=1` adds per-CDP-message tracing to the relay's stderr. Environment overrides:
 `OPENCODE_BROWSER_PORT`, `OPENCODE_BROWSER_HOME`, `OPENCODE_BROWSER_EXTENSION_ORIGINS`, `OPENCODE_BROWSER_HUMAN_INPUT`.
 
+The relay and the extension accept WebSocket messages up to 256 MiB, as Playwright's CDP client does. The extension
+fails a single command whose result is larger (for example a full-page screenshot of a very long page) instead of
+sending it, and the relay logs and drops a connection that sends more instead of crashing.
+
 Agent input looks human by default (`cli/src/human-input.ts`): each mouse move becomes a curved, eased ~60 Hz
 trajectory from the last pointer position, clicks land a few pixels off center with a human settle and hold, key
 presses are spaced 30-110 ms apart, and wheel scrolling glides. A click costs ~0.5-1 s instead of ~0.1 s;

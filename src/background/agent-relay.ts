@@ -40,6 +40,8 @@ const ALARM = "opencode-browser-relay"
 const GROUP_MARKER = "\u2063"
 const GROUP_COLOR = "grey"
 const MAX_RECORDING_BUFFER = 16 * 1024 * 1024
+/** The largest message the relay accepts, in bytes (256 MiB, as Playwright's CDP client); kept a little under. */
+const MAX_MESSAGE = 255 * 1024 * 1024
 const CONNECT_TIMEOUT = 10_000
 const KEEPALIVE = 20_000
 const BACKOFF_BASE = 500
@@ -103,7 +105,10 @@ export function createAgentRelay(input: { changed: (state: AgentRelayState) => v
 
   const open = () => (socket?.readyState === WebSocket.OPEN ? socket : undefined)
   const send = (message: JsonObject) => {
-    open()?.send(JSON.stringify(message))
+    const data = serialize(message)
+    // The relay drops a connection that sends more than it accepts; a lost event is better than a reconnect loop.
+    if (data === undefined) return log.add("event.dropped", { method: String(message.method) })
+    open()?.send(data)
   }
   const forget = (tabId: number) => {
     const known = relayTabs.delete(tabId)
@@ -265,7 +270,16 @@ export function createAgentRelay(input: { changed: (state: AgentRelayState) => v
         ok: !failed,
         error: failed ? reply.error : undefined,
       })
-    if (socket === current && current.readyState === WebSocket.OPEN) current.send(JSON.stringify(reply))
+    if (socket !== current || current.readyState !== WebSocket.OPEN) return
+    // A result larger than the relay accepts (a huge screenshot or response body) fails that one command instead of
+    // closing the connection, which would fail every command in flight and make the relay reconnect.
+    const serialized = serialize(reply)
+    if (serialized === undefined) {
+      log.add("command.tooLarge", { method: command.method, id: command.id })
+      current.send(JSON.stringify({ id: command.id, error: `Result too large to send (the limit is ${Math.floor(MAX_MESSAGE / 1048576)} MB). Request less data, for example a viewport screenshot instead of a full page.` }))
+      return
+    }
+    current.send(serialized)
   }
 
   const run = async (command: ExtensionCommand, current: WebSocket): Promise<JsonObject> => {
@@ -760,6 +774,25 @@ export function createAgentRelay(input: { changed: (state: AgentRelayState) => v
 }
 
 declare const __OPENCODE_BROWSER_BUILD__: string
+
+/**
+ * JSON for the relay, or undefined when it's larger than the relay accepts (or too large for V8 to serialize at
+ * all). Measuring UTF-8 is costly, so it only happens when the text could be over the limit.
+ */
+function serialize(message: JsonObject) {
+  const data = (() => {
+    try {
+      return JSON.stringify(message)
+    } catch {
+      return undefined
+    }
+  })()
+  if (data === undefined) return undefined
+  // Each UTF-16 unit is 1-3 UTF-8 bytes, so only the window in between needs measuring.
+  if (data.length * 3 <= MAX_MESSAGE) return data
+  if (data.length > MAX_MESSAGE) return undefined
+  return new TextEncoder().encode(data).byteLength <= MAX_MESSAGE ? data : undefined
+}
 
 const ATTACHED_TITLE = "OpenCode Browser · Agents can use this tab. Click to stop."
 
