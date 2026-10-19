@@ -249,7 +249,13 @@ function removeLegacyHost() {
  * OPENCODE_BROWSER_PACKAGE installs a specific spec instead, for example a local tarball.
  */
 function installRuntime() {
-  if (fromSource) return path.join(packageRoot, "src", "main.ts")
+  // From a checkout, run the bundle `bun run build` wrote: Node can't run the TypeScript sources (they use
+  // syntax type stripping doesn't cover), and the MCP server runs under Node.
+  if (fromSource) {
+    const bundle = path.join(packageRoot, "dist", "cli.mjs")
+    if (!existsSync(bundle)) fail("Build the CLI first: `bun run build` in cli/ (or `bun run setup` at the top).")
+    return bundle
+  }
   const spec = process.env.OPENCODE_BROWSER_PACKAGE ?? `${PACKAGE}@${opencodeBrowserVersion}`
   mkdirSync(files.runtime, { recursive: true })
   if (!existsSync(path.join(files.runtime, "package.json"))) writeFileSync(path.join(files.runtime, "package.json"), "{\"private\":true}\n")
@@ -272,7 +278,7 @@ async function install(args: string[]) {
   writeFileSync(files.settings, JSON.stringify({ ...(opencode ? { opencode } : {}), entry, version: opencodeBrowserVersion } satisfies Settings, null, 2) + "\n")
   if (removeLegacyHost()) log("✓ Removed the native messaging host of an earlier version")
 
-  const node = fromSource ? (findOnPath("bun") ?? process.execPath) : process.execPath
+  const node = process.execPath
   log(opencode ? `✓ Using opencode at ${opencode}` : "! opencode not found. Install it (https://opencode.ai) to use the browse tools; they're configured for it.")
   log(`✓ MCP server ${configureMcp(entry)}`)
   const relay = restartOutdatedRelay(entry, node)
